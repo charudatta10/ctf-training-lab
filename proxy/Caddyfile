@@ -1,0 +1,39 @@
+# Caddy reverse proxy - single HTTP entry point for the mobile security lab.
+#
+# Students reach all HTTP services through ONE port on your host. Caddy routes
+# each request to the correct internal service based on the "Host" header.
+#
+# *.sslip.io hostnames resolve to your IP automatically, so students need NO
+# DNS / hosts-file setup:
+#   <service>.<YOUR-IP>.sslip.io
+#
+# Examples (replace IP with your host's current LAN IP, and PORT with PROXY_PORT):
+#   http://ctfd.10.250.12.246.sslip.io:PORT/       -> CTFd
+#   http://appstore.10.250.12.246.sslip.io:PORT/   -> appstore (APK download)
+#   http://api.10.250.12.246.sslip.io:PORT/        -> mobile backend (HTTP)
+#
+# {env.PROXY_PORT} and {env.SERVICE_DOMAIN} are injected from compose env.
+
+:{$PROXY_PORT} {
+	# Route by Host header. {env.SERVICE_DOMAIN} = "<IP>.sslip.io" from compose.
+
+	@ctfdHost host ctfd.{env.SERVICE_DOMAIN}
+	handle @ctfdHost {
+		reverse_proxy ctfd:8000
+	}
+
+	@appstoreHost host appstore.{env.SERVICE_DOMAIN}
+	handle @appstoreHost {
+		reverse_proxy appstore:8001
+	}
+
+	@apiHost host api.{env.SERVICE_DOMAIN}
+	handle @apiHost {
+		reverse_proxy api:3000
+	}
+
+	# Fallback (any other Host, or the bare IP) -> CTFd
+	handle {
+		reverse_proxy ctfd:8000
+	}
+}

@@ -1,0 +1,31 @@
+# Environment / secrets
+.env
+
+# CTFd runtime data
+ctfd/data/
+ctfd/logs/
+ctfd/ctfd.conf
+ctfd/keys/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Android / Gradle build artifacts (host-side)
+targets/**/build/
+targets/**/.gradle/
+targets/**/local.properties
+targets/app/**/*.iml
+.cxx/
+
+# Built APK + native strings dump (produced by lab.py build-apk)
+targets/appstore/www/apk/*.apk
+targets/appstore/www/apk/*.strings.txt

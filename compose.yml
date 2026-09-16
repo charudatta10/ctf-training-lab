@@ -1,0 +1,139 @@
+# ============================================================================
+# mobsec-ctf-lab - container orchestration
+# Podman / Podman Compose compatible.
+#
+# Topology:
+#   CTFd (web UI)  -> browser  (localhost only by default)
+#   CTFd + db + cache + appstore + api  <->  mobsec-lab-net (isolated)
+#
+# The mobile-lab targets (appstore, api) are ONLY reachable on the isolated
+# "mobsec-lab-net" network. The api additionally publishes loopback ports so
+# an Android emulator/device on the host (10.0.2.2) can reach it for the
+# dynamic-analysis labs. appstore is NOT port-mapped by default.
+# ============================================================================
+
+name: mobsec-ctf-lab
+
+networks:
+  mobsec-lab-net:
+    name: mobsec-lab-net
+    driver: bridge
+    # Internal network: no default route to the host or internet.
+    internal: true
+
+services:
+  # -------------------------------------------------------------------------
+  # CTFd platform
+  # -------------------------------------------------------------------------
+  ctfd:
+    image: ghcr.io/ctfd/ctfd:3.7.4
+    restart: unless-stopped
+    environment:
+      - UPLOAD_FOLDER=/var/uploads
+      - DATABASE_URL=${CTFD_DATABASE_URL}
+      - REDIS_URL=${CTFD_REDIS_URL}
+      - SECRET_KEY=${CTFD_SECRET_KEY}
+      - WORKERS=${CTFD_WORKERS:-1}
+      - LOG_FOLDER=/var/log/CTFd
+      - CTF_NAME=${CTFD_CTF_NAME}
+      - CTF_DESCRIPTION=${CTFD_CTF_DESCRIPTION}
+      - MODE=${CTFD_MODE}
+    volumes:
+      - ./ctfd/data/uploads:/var/uploads
+      - ./ctfd/data/logs:/var/log/CTFd
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    ports:
+      # Local-only bind by default. Do NOT change 127.0.0.1 unless you intend
+      # to expose CTFd to your LAN (see .env CTFD_BIND_ADDR).
+      - "${CTFD_BIND_ADDR:-127.0.0.1}:${CTFD_BIND_PORT:-8000}:8000"
+    networks:
+      - mobsec-lab-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/challenges', timeout=5).status in (200,401) else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  # -------------------------------------------------------------------------
+  # CTFd database
+  # -------------------------------------------------------------------------
+  db:
+    image: docker.io/library/mariadb:10.11
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    volumes:
+      - ctfd-db:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - mobsec-lab-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # -------------------------------------------------------------------------
+  # CTFd cache (Redis)
+  # -------------------------------------------------------------------------
+  cache:
+    image: docker.io/library/redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - mobsec-lab-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # -------------------------------------------------------------------------
+  # Mobile-lab targets - inside the isolated network only.
+  # No internet access (internal network).
+  # -------------------------------------------------------------------------
+  # appstore - serves the vulnerable APK + module attachments to students.
+  appstore:
+    build: ./targets/appstore
+    image: mobsec-lab/appstore:latest
+    restart: unless-stopped
+    volumes:
+      - ./targets/appstore/www:/www:ro,Z
+    networks:
+      - mobsec-lab-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/apk/', timeout=5) and exit(0)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # api - the backend the GlowMart Mobile app talks to (Module 3).
+  # Pinned HTTPS endpoint on 3443 (SSL-pinning lab), plain HTTP on 3000.
+  # Published to the host loopback so the emulator reaches it via 10.0.2.2.
+  api:
+    build: ./targets/api
+    image: mobsec-lab/api:latest
+    restart: unless-stopped
+    ports:
+      - "${API_BIND_ADDR:-127.0.0.1}:${API_BIND_PORT:-3000}:3000"
+      - "${API_BIND_ADDR:-127.0.0.1}:${API_HTTPS_PORT:-3443}:3443"
+    networks:
+      - mobsec-lab-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/health', timeout=5) and exit(0)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  ctfd-db:

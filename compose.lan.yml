@@ -1,0 +1,51 @@
+# ============================================================================
+# compose.lan.yml - OPTIONAL overlay that gives students a SINGLE network entry
+# point via a Caddy reverse proxy while keeping per-target host ports minimal.
+#
+# The mobile-lab targets (appstore, api) keep NO broad host ports and stay on
+# the isolated internal network. Caddy fronts them (plus CTFd) as ONE exposed
+# HTTP port (PROXY_PORT, default 8080), routing by Host header using *.sslip.io
+# hostnames so students need no DNS setup.
+#
+# The api service additionally re-binds its HTTP/HTTPS ports to 0.0.0.0 so
+# emulators/students on the LAN can reach the mobile backend directly
+# (these are the same ports the app uses, see README).
+#
+# Usage (any terminal, requires Python 3.8+):
+#   EXPOSE_TARGETS=1 python scripts/lab.py start
+#   python scripts/lab.py expose   # admin Windows: firewall + portproxy
+#
+# Before using, set SERVICE_DOMAIN in .env to "<CURRENT-LAN-IP>.sslip.io"
+# (or better: give your host a static IP and set it once).
+# ============================================================================
+
+services:
+  proxy:
+    image: docker.io/library/caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      PROXY_PORT: "${PROXY_PORT:-8080}"
+      SERVICE_DOMAIN: "${SERVICE_DOMAIN:-localhost}"
+    ports:
+      - "${TARGET_BIND_ADDR:-0.0.0.0}:${PROXY_PORT:-8080}:${PROXY_PORT:-8080}"
+    networks:
+      - mobsec-lab-net
+    depends_on:
+      - ctfd
+      - appstore
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:${PROXY_PORT:-8080}/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # Re-bind the api HTTP/HTTPS ports to the LAN so emulators/devices on the
+  # network can reach the mobile backend directly.
+  api:
+    ports:
+      - "${TARGET_BIND_ADDR:-0.0.0.0}:${API_BIND_PORT:-3000}:3000"
+      - "${TARGET_BIND_ADDR:-0.0.0.0}:${API_HTTPS_PORT:-3443}:3443"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GlowMart Mobile</string>
+    <string name="debug_leak_flag">flag{activity_intent_extra_leak}</string>
+    <string name="provider_flag">flag{provider_unprotected}</string>
+    <string name="vault_flag">flag{root_check_bypassed}</string>
+</resources>

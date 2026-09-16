@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "description": "Mobile app security challenge registry for mobsec-ctf-lab. Consumed by scripts/provision.py to create challenges in CTFd. Modules follow the course AGENTS.md: Android Architecture (Set 1), Static Analysis (Set 2), Dynamic Analysis (Set 3). Challenge id/name/value/difficulty/flag/hints.",
+  "challenges": [
+    {
+      "id": "arch-manifest",
+      "category": "Android Architecture",
+      "name": "Arch: Manifest Export Misconfiguration (L1)",
+      "description": "Download and decompile the GlowMart Mobile APK (GlowMartMobile.apk) from the app store (see the Module 1 brief).\n\nOpen the decompiled AndroidManifest.xml with jadx or apktool. One component is exported without a good reason and carries a flag in its metadata.\n\nFind the flag and submit it inside flag{...}.",
+      "value": 150,
+      "difficulty": "Level 1",
+      "flag": "flag{manifest_exported_leak}",
+      "hints": [
+        "Look for an <activity> with android:exported=\"true\" that has no intent-filter.",
+        "Flags hidden in manifest components often live in <meta-data> values.",
+        "Decompile with: jadx GlowMartMobile.apk   (or: apktool d GlowMartMobile.apk)."
+      ]
+    },
+    {
+      "id": "arch-intent-leak",
+      "category": "Android Architecture",
+      "name": "Arch: Exported Activity Intent-Extra Leak (L1)",
+      "description": "This challenge is about exported Activities and their Intent contracts.\n\nGlowMart Mobile contains an exported debug activity that reveals a secret flag — but only when the correct Intent extra is supplied.\n\nDecompile the app to discover the Activity name, the extra key it reads, and the magic value it expects, then launch it with adb to reveal the flag (or read its value directly).\n\nExample: adb shell am start -n com.glowmart.mobile/.DebugLeakActivity --es <key> <value>",
+      "value": 200,
+      "difficulty": "Level 1",
+      "flag": "flag{activity_intent_extra_leak}",
+      "hints": [
+        "Search the decompiled source for getIntent().getStringExtra(...).",
+        "The Activity compares the extra against a static constant — 'auth_override' = 'grant'.",
+        "The revealed flag is also stored in res/values/strings.xml."
+      ]
+    },
+    {
+      "id": "arch-resources",
+      "category": "Android Architecture",
+      "name": "Arch: Flag Hidden in Resources (L1)",
+      "description": "Static resources often contain secrets that developers forget about.\n\nIn GlowMart Mobile, a flag is hidden in one of the packaged resource files (strings.xml, assets, or res/raw).\n\nDecompile the APK and look through the resource files. jadx shows res/raw and assets automatically; apktool exposes the raw layout.",
+      "value": 200,
+      "difficulty": "Level 1",
+      "flag": "flag{resource_hidden_secret}",
+      "hints": [
+        "Check assets/ first and then res/raw/.",
+        "A file named secret_codebook.json in res/raw contains an embedded secret.",
+        "Also decompile the APK's strings.xml — an unused string may be a red herring."
+      ]
+    },
+    {
+      "id": "arch-provider",
+      "category": "Android Architecture",
+      "name": "Arch: Unprotected Content Provider (L2)",
+      "description": "Content Providers control access to app data. An exported provider without permission checks lets any app (or adb) read it.\n\nGlowMart Mobile defines an exported ContentProvider at authority com.glowmart.mobile.secrets.\n\nQuery it to extract the flag. From adb:\n\nadb shell content query --uri content://com.glowmart.mobile.secrets/flag",
+      "value": 250,
+      "difficulty": "Level 2",
+      "flag": "flag{provider_unprotected}",
+      "hints": [
+        "The provider is declared in AndroidManifest.xml with android:exported=\"true\".",
+        "Query the authority with the path segment 'flag'.",
+        "Try: adb shell content query --uri content://com.glowmart.mobile.secrets/flag"
+      ]
+    },
+
+    {
+      "id": "static-hb-key",
+      "category": "Static Analysis",
+      "name": "Static: Hardcoded API Key (L2)",
+      "description": "Reverse the app's authentication layer.\n\nGlowMart Mobile embeds an API key directly in its Java sources. Decompile the app and locate the class that supplies authentication tokens; the key is stored as a constant.\n\nj adx-gui makes source navigation easy; apktool shows the smali (more painful but exact).",
+      "value": 300,
+      "difficulty": "Level 2",
+      "flag": "flag{static_hardcoded_api_key}",
+      "hints": [
+        "Search the decompiled sources for 'API_KEY' or 'api_key'.",
+        "The class AuthTokenProvider exposes a public static final String.",
+        "Hardcoded secrets in source = CWE-798."
+      ]
+    },
+    {
+      "id": "static-encoded",
+      "category": "Static Analysis",
+      "name": "Static: Weakly Encoded Flag (L2)",
+      "description": "Not all 'encryption' is encryption.\n\nGlowMart Mobile stores a private note as a plaintext-looking constant that is only encoded, not encrypted.\n\nFind the encoded constant in the decompiled sources and decode it manually. CyberChef can decode Base64 in a single step.",
+      "value": 300,
+      "difficulty": "Level 2",
+      "flag": "flag{weak_encoding_xor_base64}",
+      "hints": [
+        "Look in the Strings class for a Base64-encoded constant.",
+        "Copy the constant into CyberChef → From Base64.",
+        "If you find an XOR step, the key is a single low byte (try 0x2A or brute force 0x00-0xFF)."
+      ]
+    },
+    {
+      "id": "static-crypto",
+      "category": "Static Analysis",
+      "name": "Static: Insecure Crypto - Static AES Key (L2)",
+      "description": "Cryptography is only as good as its key management.\n\nGlowMart Mobile decrypts a secret with AES-128-ECB using a hardcoded key and no IV.\n\nDecompile the CryptoBox class, note the algorithm ('AES/ECB/PKCS5Padding'), extract the key and the base64 ciphertext, and decrypt it. CyberChef (AES Decrypt → ECB) works perfectly.",
+      "value": 350,
+      "difficulty": "Level 2",
+      "flag": "flag{static_aes_ecb_key}",
+      "hints": [
+        "Constant-time key: a 16-byte ASCII string, not random-looking.",
+        "ECB mode: no IV needed, no mode dependencies.",
+        "Use AES-128, key in UTF-8, PKCS7 padding, output raw → the flag is the plaintext."
+      ]
+    },
+    {
+      "id": "static-mobsf",
+      "category": "Static Analysis",
+      "name": "Static: MobSF Flagged Secret (L2)",
+      "description": "Automated scanners make secrets easy to find.\n\nRun the APK through MobSF (static scan). One of the flagged findings contains a live flag — a hardcoded secret MobSF reports as a vulnerability.\n\n(MobSF can be run locally via Docker; a pre-baked MobSF report is included in the app store if the scanner is unavailable.)",
+      "value": 350,
+      "difficulty": "Level 2",
+      "flag": "flag{mobsf_scan_discovered_secret}",
+      "hints": [
+        "MobSF's 'Hardcoded Secrets' / 'Embedded Credentials' section lists values found in code and resources.",
+        "The secret also sits in res/values/secrets.xml under the name api_secret_key.",
+        "Scan endpoint: static scan the uploaded GlowMartMobile.apk."
+      ]
+    },
+    {
+      "id": "static-native",
+      "category": "Static Analysis",
+      "name": "Static: Native Library String (L3 / stretch)",
+      "description": "Native code is a favorite hiding place for secrets.\n\nGlowMart Mobile loads a small shared library (libglowmart.so). Extract the native library from the APK (unzip the jniLibs/lib/<abi>/libglowmart.so) and run strings(1) on it.\n\nA strings(1) dump is also available in the app store if you do not want to unzip.",
+      "value": 400,
+      "difficulty": "Level 3",
+      "flag": "flag{native_so_string_discovery}",
+      "hints": [
+        "unzip GlowMartMobile.apk 'lib/*/libglowmart.so' then: strings libglowmart.so | grep -i flag",
+        "The flag is embedded as an ordinary C string in the shared library.",
+        "The native source is at targets/app/app/src/main/cpp/glowlib.c."
+      ]
+    },
+
+    {
+      "id": "dyn-pinning",
+      "category": "Dynamic Analysis",
+      "name": "Dynamic: SSL Pinning Bypass (L3)",
+      "description": "The app talks to its backend over TLS with certificate pinning.\n\nInstall the APK on an emulator, start Burp Suite or mitmproxy as your interception proxy, and try to read the app's /api/v1/mobile/banner call. Certificate pinning will block it.\n\nBypass the pinning with a Frida hook (overriding PinnedApiClient.checkServerTrusted) and intercept the call to obtain the flag.\n\nThe backend HTTPS endpoint is https://10.0.2.2:3443 (emulator) / https://127.0.0.1:3443 (host).",
+      "value": 450,
+      "difficulty": "Level 3",
+      "flag": "flag{ssl_pinning_bypassed}",
+      "hints": [
+        "Hook com.glowmart.mobile.PinnedApiClient and neuter its pin check (return without throwing).",
+        "Objection: android sslpinning disable  works on many implementations.",
+        "Alternatively hook javax.net.ssl.SSLContext.init to accept the proxy CA."
+      ]
+    },
+    {
+      "id": "dyn-root",
+      "category": "Dynamic Analysis",
+      "name": "Dynamic: Root Detection Bypass (L3)",
+      "description": "A 'vault' screen in GlowMart Mobile refuses to open on rooted devices.\n\nRun the app on a rooted emulator and launch the vault (MainActivity → 'Open vault', or adb shell am start -n com.glowmart.mobile/.VaultActivity). It will report root detected and stay locked.\n\nBypass the RootCheck.isDeviceRooted() check with Frida so the vault unlocks, then read the flag.",
+      "value": 400,
+      "difficulty": "Level 3",
+      "flag": "flag{root_check_bypassed}",
+      "hints": [
+        "Frida: Java.perform → hook com.glowmart.mobile.RootCheck.isDeviceRooted and return false.",
+        "The vault reveals the flag when isDeviceRooted() returns false.",
+        "On a non-rooted emulator the vault opens directly — that is also the expected runtime result."
+      ]
+    },
+    {
+      "id": "dyn-frida-decrypt",
+      "category": "Dynamic Analysis",
+      "name": "Dynamic: Frida Runtime-Decrypt Dump (L3)",
+      "description": "Some secrets only exist at run time.\n\nGlowMart Mobile decrypts a blob at run time with a caller-supplied argument (userId). Decode CryptoBox-adjacent class Vault: its getDecryptedSecret(int userId) returns the decrypted secret in memory.\n\nUse Frida to hook Vault.getDecryptedSecret, call it with the correct userId (4242), and dump the return value.",
+      "value": 450,
+      "difficulty": "Level 3",
+      "flag": "flag{frida_runtime_decrypt_dump}",
+      "hints": [
+        "Hook: Java.perform → var Vault = Java.use('com.glowmart.mobile.Vault'); console.log(Vault.getDecryptedSecret(4242));",
+        "The userId used by the app's license check is 4242.",
+        "Static XOR decoding is possible too: the blob is base64, key = userId & 0xFF."
+      ]
+    },
+    {
+      "id": "dyn-logcat",
+      "category": "Dynamic Analysis",
+      "name": "Dynamic: Logcat Debug Leak (L2)",
+      "description": "Debug logging leaks secrets into a place everyone can read.\n\nLaunch GlowMart Mobile on the emulator and watch logcat while the MainActivity initialises. A debug log line contains a flag.\n\nadb logcat | grep -i flag",
+      "value": 300,
+      "difficulty": "Level 2",
+      "flag": "flag{logcat_debug_leak}",
+      "hints": [
+        "Start logcat before launching the app: adb logcat -c && adb shell am start -n com.glowmart.mobile/.MainActivity && adb logcat -d | grep GlowMartDebug",
+        "The tag is GlowMartDebug.",
+        "Search logcat for the literal pattern flag{...}."
+      ]
+    },
+    {
+      "id": "dyn-storage",
+      "category": "Dynamic Analysis",
+      "name": "Dynamic: Local Storage Forensics (L3)",
+      "description": "Apps store state where attackers can pull it.\n\nAfter using GlowMart Mobile once, pull its private data directory and inspect the SQLite database and SharedPreferences.\n\nadb pull /data/data/com.glowmart.mobile (rooted) or adb backup / run-as extraction, then inspect glowmart.db and shared_prefs/session_data.xml for a stored flag.",
+      "value": 350,
+      "difficulty": "Level 3",
+      "flag": "flag{local_database_forensics}",
+      "hints": [
+        "SQLite file: /data/data/com.glowmart.mobile/databases/glowmart.db, table 'secrets'.",
+        "SharedPreferences: /data/data/com.glowmart.mobile/shared_prefs/session_data.xml, key 'remembered_flag'.",
+        "On a non-rooted emulator: adb exec-out run-as com.glowmart.mobile cat databases/glowmart.db works for debuggable builds."
+      ]
+    }
+  ]
+}

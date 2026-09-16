@@ -1,0 +1,5 @@
+Private notes - IT
+
+The staging secret was re-encoded and moved into the raw codebook.
+Only resource files may exist between builds.
+Enumerate res/ and assets/ to find interesting artifacts.

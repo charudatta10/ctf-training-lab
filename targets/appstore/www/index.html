@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>GlowMart Mobile - Internal App Store (LAB)</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 720px; }
+        li { margin: .5rem 0; }
+        code { background: #f4f4f4; padding: .15rem .4rem; border-radius: 4px; }
+        .warn { color: #9a3324; }
+    </style>
+</head>
+<body>
+    <h1>GlowMart Mobile - Internal App Store</h1>
+    <p class="warn">Authorized laboratory build only. Do not install outside the course emulator/device.</p>
+
+    <h2>APK download</h2>
+    <ul>
+        <li><code><a href="/apk/GlowMartMobile.apk">/apk/GlowMartMobile.apk</a></code></li>
+    </ul>
+
+    <h2>Support files</h2>
+    <ul>
+        <li><code><a href="/apk/libglowmart.strings.txt">/apk/libglowmart.strings.txt</a></code>
+            (strings(1) dump of libglowmart.so - M2-C9)</li>
+    </ul>
+
+    <h2>Install on the emulator</h2>
+    <pre>
+adb install GlowMartMobile.apk   # or: adb install -r GlowMartMobile.apk
+adb shell am start -n com.glowmart.mobile/.MainActivity
+    </pre>
+</body>
+</html>
